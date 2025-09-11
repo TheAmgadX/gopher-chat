@@ -57,7 +57,7 @@ func (s *Server) RoomsList(c *Client) {
 		rooms = append(rooms, name)
 	}
 
-	c.Msg(fmt.Sprintf("available rooms: $s", strings.Join(rooms, ", ")))
+	c.Msg(fmt.Sprintf("available rooms: %s", strings.Join(rooms, ", ")))
 }
 
 func (s *Server) Message(c *Client, args []string) {
@@ -106,7 +106,7 @@ func (s *Server) Run() {
 }
 
 func (s *Server) NewClient(conn net.Conn) {
-	log.Printf("new client has connected: $s", conn.RemoteAddr().String())
+	log.Printf("new client has connected: %s", conn.RemoteAddr().String())
 
 	c := &Client{
 		Conn:     conn,
