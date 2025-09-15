@@ -3,32 +3,49 @@ package main
 import (
 	"log"
 	"net"
+	"net/http"
 
+	"github.com/TheAmgadX/gopher-chat/internal/api"
 	"github.com/TheAmgadX/gopher-chat/internal/server"
 )
 
 func main() {
-	sv := server.InitServer()
+	chatServer := server.InitServer()
 
-	go sv.Run()
+	// Start the chat server in a goroutine
+	go chatServer.Run()
 
-	listener, err := net.Listen("tcp", ":8888")
-
-	if err != nil {
-		log.Fatalf("Error, unable to start server: %s", err.Error())
-	}
-	defer listener.Close()
-
-	log.Printf("started gopher chat server on :8888")
-
-	for {
-		conn, err := listener.Accept()
-
+	// Start TCP server for traditional chat clients
+	go func() {
+		listener, err := net.Listen("tcp", ":8081")
 		if err != nil {
-			log.Printf("unable to accept connection, %s", err.Error())
-			continue
+			log.Fatalf("Error starting TCP server: %v", err)
 		}
+		defer listener.Close()
 
-		go sv.NewClient(conn)
+		log.Println("TCP chat server started on :8081")
+
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				log.Printf("Error accepting TCP connection: %v", err)
+				continue
+			}
+
+			go chatServer.NewClient(conn)
+		}
+	}()
+
+	api.Init(chatServer)
+
+	// Setup HTTP router
+	router := api.NewRouter(chatServer)
+
+	log.Println("Web server starting on :8080")
+	log.Println("TCP chat server on :8081")
+	log.Println("WebSocket endpoint: ws://localhost:8080/ws?token=<your_jwt_token>")
+
+	if err := http.ListenAndServe(":8080", router); err != nil {
+		log.Fatalf("Error starting web server: %v", err)
 	}
 }
