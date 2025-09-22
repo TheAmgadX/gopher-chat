@@ -11,12 +11,25 @@ type Hub struct {
 	Mux     sync.RWMutex
 }
 
+func NewHub() *Hub {
+	return &Hub{
+		Clients: make(map[string]*Client),
+		Rooms:   make(map[string]*Room),
+	}
+}
+
 func (h *Hub) CreateRoom(request OperationsRequest) (*Room, error) {
 	if request.RoomName == "" {
 		return nil, fmt.Errorf("error: room name cannot be empty")
 	}
 
-	h.Mux.RLock() // allow read operations.
+	h.Mux.RLock()
+	client := h.Clients[request.Username]
+
+	if client == nil {
+		h.Mux.RUnlock()
+		return nil, fmt.Errorf("error: username not found")
+	}
 
 	// if room already exists just no operation.
 	if room, ok := h.Rooms[request.RoomName]; ok {
@@ -25,27 +38,15 @@ func (h *Hub) CreateRoom(request OperationsRequest) (*Room, error) {
 	}
 
 	h.Mux.RUnlock()
-	room := &Room{
-		Name:       request.RoomName,
-		Members:    make(map[*Client]bool),
-		Register:   make(chan *Client, 10),
-		Unregister: make(chan *Client, 10),
-		Broadcast:  make(chan *Message, 1000),
-	}
+	room := newRoom(request.RoomName)
 
 	h.Mux.Lock()
 	h.Rooms[request.RoomName] = room
 	h.Mux.Unlock()
 
-	h.Mux.RLock()
-	client := h.Clients[request.Username]
-	h.Mux.RUnlock()
-
-	if client != nil {
-		room.Register <- client
-	}
-
-	go room.Run()
+	room.Register <- client
+	client.Room = room
+	go room.run(h)
 
 	return room, nil
 }
@@ -66,7 +67,14 @@ func (h *Hub) JoinRoom(request OperationsRequest) error {
 		return fmt.Errorf("error: username not found")
 	}
 
+	// if the user exist in a room unregister him.
+	if client.Room != nil {
+		room.Unregister <- client
+	}
+
 	room.Register <- client
+
+	client.Room = room
 
 	return nil
 }
@@ -103,6 +111,10 @@ func (h *Hub) SendMessage(msg *Message) error {
 		return fmt.Errorf("error: username cannot be empty")
 	}
 
+	if msg.Type == "" {
+		return fmt.Errorf("error: message type cannot be empty")
+	}
+
 	h.Mux.RLock()
 	client := h.Clients[msg.Username]
 	h.Mux.RUnlock()
@@ -120,7 +132,7 @@ func (h *Hub) SendMessage(msg *Message) error {
 	return nil
 }
 
-func (h *Hub) ListRooms() []*Room {
+func (h *Hub) ListRooms() []string {
 	h.Mux.RLock()
 	defer h.Mux.RUnlock()
 
@@ -128,13 +140,13 @@ func (h *Hub) ListRooms() []*Room {
 		return nil
 	}
 
-	rooms := make([]*Room, 0, len(h.Rooms))
+	roomsNames := make([]string, 0, len(h.Rooms))
 
-	for _, room := range h.Rooms {
-		rooms = append(rooms, room)
+	for name := range h.Rooms {
+		roomsNames = append(roomsNames, name)
 	}
 
-	return rooms
+	return roomsNames
 }
 
 func (h *Hub) GetRoomUsers(request OperationsRequest) ([]*Client, error) {
@@ -146,7 +158,7 @@ func (h *Hub) GetRoomUsers(request OperationsRequest) ([]*Client, error) {
 		return nil, fmt.Errorf("error: room %v not found", request.RoomName)
 	}
 
-	return room.GetMembers(), nil
+	return room.getMembers(), nil
 }
 
 func (h *Hub) RegisterUser(request OperationsRequest) error {
@@ -165,8 +177,8 @@ func (h *Hub) RegisterUser(request OperationsRequest) error {
 
 	client := &Client{
 		UserName: request.Username,
-		Send:     make(chan *Message),
-		Conn:     request.conn,
+		Send:     make(chan *Message, 250),
+		Conn:     request.Conn,
 	}
 
 	if room != nil {
@@ -181,6 +193,8 @@ func (h *Hub) RegisterUser(request OperationsRequest) error {
 	h.Clients[request.Username] = client
 
 	h.Mux.Unlock()
+
+	go client.writePump()
 
 	return nil
 }
@@ -202,11 +216,25 @@ func (h *Hub) UnregisterUser(request OperationsRequest) error {
 
 	h.Mux.Unlock()
 
+	close(client.Send) // close the channel to stop the go routine of the client.
+
 	room := client.Room
 
 	if room != nil {
 		room.Unregister <- client
+		client.Room = nil
 	}
 
 	return nil
+}
+
+// delete room from the Rooms map
+// called by the room itself when it's empty.
+func (h *Hub) CloseRoom(name string) {
+	h.Mux.Lock()
+	defer h.Mux.Unlock()
+
+	if _, ok := h.Rooms[name]; ok {
+		delete(h.Rooms, name)
+	}
 }

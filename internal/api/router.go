@@ -3,29 +3,38 @@ package api
 import (
 	"net/http"
 
+	"github.com/TheAmgadX/gopher-chat/internal/api/handlers"
 	"github.com/TheAmgadX/gopher-chat/internal/middleware"
-	"github.com/TheAmgadX/gopher-chat/internal/server"
 	"github.com/gorilla/mux"
 )
 
-func NewRouter(chatServer *server.Server) *mux.Router {
+func NewRouter() *mux.Router {
 	router := mux.NewRouter()
 
-	// Auth endpoint
-	router.HandleFunc("/api/login", LoginHandler()).Methods("POST")
-
-	// WebSocket endpoint
-	router.HandleFunc("/ws", WebSocketHandler(chatServer)).Methods("GET")
-
-	// REST API endpoints for room management.
+	// --- Group ALL API endpoints under a single subrouter ---
+	// This ensures all of them get the same middleware consistently.
 	api := router.PathPrefix("/api").Subrouter()
 
-	api.HandleFunc("/rooms/", GetRoomsHandler(chatServer)).Methods("GET")
-	api.HandleFunc("/user/rename", RenameUserHandler()).Methods("POST")
-
+	// Apply CORS middleware to every API call.
+	// You only need to add it once.
 	api.Use(middleware.CorsMiddleware)
 
-	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./web/")))
+	// --- PUBLIC API Routes (No Auth Needed) ---
+	api.HandleFunc("/login", handlers.LoginHandler).Methods("POST")
+
+	// --- PROTECTED API Routes (Auth Needed) ---
+	protected := api.PathPrefix("/").Subrouter()
+	protected.Use(middleware.AuthMiddleware)
+
+	// create WebSocket endpoint
+	protected.HandleFunc("/ws", handlers.NewConnectionHandler).Methods("GET")
+
+	// --- File Server for your UI ---
+	staticFileServer := http.FileServer(http.Dir("./web/static/"))
+	router.PathPrefix("/static/").Handler(http.StripPrefix("/static/", staticFileServer))
+
+	fileServer := http.FileServer(http.Dir("./web/templates/"))
+	router.PathPrefix("/").Handler(http.StripPrefix("/", fileServer))
 
 	return router
 }

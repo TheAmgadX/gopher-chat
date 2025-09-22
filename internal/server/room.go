@@ -11,7 +11,17 @@ type Room struct {
 	Mux        sync.RWMutex
 }
 
-func (r *Room) GetMembers() []*Client {
+func newRoom(name string) *Room {
+	return &Room{
+		Name:       name,
+		Broadcast:  make(chan *Message, 1024),
+		Register:   make(chan *Client, 16),
+		Unregister: make(chan *Client, 16),
+		Members:    make(map[*Client]bool),
+	}
+}
+
+func (r *Room) getMembers() []*Client {
 	r.Mux.RLock()
 	defer r.Mux.RUnlock()
 
@@ -54,13 +64,13 @@ func (r *Room) leave(client *Client) {
 	delete(r.Members, client)
 }
 
-func (r *Room) CurrentMembersCount() int {
+func (r *Room) currentMembersCount() int {
 	r.Mux.RLock()
 	defer r.Mux.RUnlock()
 	return len(r.Members)
 }
 
-func (r *Room) Run() {
+func (r *Room) run(h *Hub) {
 	for {
 		select {
 		case client := <-r.Register:
@@ -69,7 +79,8 @@ func (r *Room) Run() {
 		case client := <-r.Unregister:
 			r.leave(client)
 
-			if r.CurrentMembersCount() == 0 {
+			if r.currentMembersCount() == 0 {
+				h.CloseRoom(r.Name)
 				return
 			}
 

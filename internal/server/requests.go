@@ -6,5 +6,5 @@ type OperationsRequest struct {
 	Type     string `json:"type"`
 	RoomName string `json:"room"`
 	Username string `json:"username"`
-	conn     *websocket.Conn
+	Conn     *websocket.Conn
 }
