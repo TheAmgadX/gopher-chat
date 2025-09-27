@@ -1,6 +1,9 @@
 package server
 
-import "sync"
+import (
+	"log"
+	"sync"
+)
 
 type Room struct {
 	Name       string
@@ -39,9 +42,7 @@ func (r *Room) broadcast(msg *Message) {
 		select {
 		case client.Send <- msg:
 		default:
-			// drop if client is slow/unresponsive
-			delete(r.Members, client) // remove the client from the room.
-			client.Room = nil
+			log.Printf("client %s's send channel is full. Dropping message.", client.UserName)
 		}
 	}
 }

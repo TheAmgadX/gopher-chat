@@ -1,15 +1,18 @@
 package api
 
 import (
-	"net/http"
-
 	"github.com/TheAmgadX/gopher-chat/internal/api/handlers"
 	"github.com/TheAmgadX/gopher-chat/internal/middleware"
+	"github.com/TheAmgadX/gopher-chat/internal/server"
 	"github.com/gorilla/mux"
 )
 
-func NewRouter() *mux.Router {
+func NewRouter(hub *server.Hub) *mux.Router {
 	router := mux.NewRouter()
+
+	handlers := handlers.APIHandlers{
+		Hub: hub,
+	}
 
 	// --- Group ALL API endpoints under a single subrouter ---
 	// This ensures all of them get the same middleware consistently.
@@ -26,15 +29,17 @@ func NewRouter() *mux.Router {
 	protected := api.PathPrefix("/").Subrouter()
 	protected.Use(middleware.AuthMiddleware)
 
-	// create WebSocket endpoint
+	// create WebSocket endpoint.
 	protected.HandleFunc("/ws", handlers.NewConnectionHandler).Methods("GET")
 
-	// --- File Server for your UI ---
-	staticFileServer := http.FileServer(http.Dir("./web/static/"))
-	router.PathPrefix("/static/").Handler(http.StripPrefix("/static/", staticFileServer))
+	// rooms list endpoint.
+	protected.HandleFunc("/rooms", handlers.GetAllRoomsHandler).Methods("GET")
 
-	fileServer := http.FileServer(http.Dir("./web/templates/"))
-	router.PathPrefix("/").Handler(http.StripPrefix("/", fileServer))
+	// join room endpoint.
+	protected.HandleFunc("/join", handlers.JoinRoomHandler).Methods("POST")
+
+	// leave room endpoint.
+	protected.HandleFunc("/leave", handlers.LeaveRoomHandler).Methods("POST")
 
 	return router
 }

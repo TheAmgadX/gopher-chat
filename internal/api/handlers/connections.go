@@ -11,13 +11,6 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// TODO: make a design for this Hub ptr lifecycle.
-var hub *server.Hub
-
-func init() {
-	hub = server.NewHub()
-}
-
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
@@ -28,7 +21,7 @@ var upgrader = websocket.Upgrader{
 }
 
 // Handles POST /login
-func LoginHandler(w http.ResponseWriter, r *http.Request) {
+func (h *APIHandlers) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Username string `json:"username"`
 	}
@@ -49,7 +42,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // Handles GET /ws (and is wrapped by AuthMiddleware)
-func NewConnectionHandler(w http.ResponseWriter, r *http.Request) {
+func (h *APIHandlers) NewConnectionHandler(w http.ResponseWriter, r *http.Request) {
 	// Get user info from the context (placed by AuthMiddleware)
 	claims := r.Context().Value(middleware.UserClaimsKey).(*middleware.Claims)
 
@@ -67,7 +60,7 @@ func NewConnectionHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// register the new client in the Hub.
-	err = hub.RegisterUser(req)
+	err = h.Hub.RegisterUser(req)
 
 	if err != nil {
 		ws.WriteJSON(map[string]any{

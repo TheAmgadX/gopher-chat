@@ -69,7 +69,7 @@ func (h *Hub) JoinRoom(request OperationsRequest) error {
 
 	// if the user exist in a room unregister him.
 	if client.Room != nil {
-		room.Unregister <- client
+		client.Room.Unregister <- client
 	}
 
 	room.Register <- client
@@ -195,6 +195,7 @@ func (h *Hub) RegisterUser(request OperationsRequest) error {
 	h.Mux.Unlock()
 
 	go client.writePump()
+	go client.readPump(h)
 
 	return nil
 }

@@ -27,8 +27,39 @@ func (c *Client) writePump() {
 		err = c.Conn.WriteMessage(websocket.TextMessage, data)
 
 		if err != nil {
+			// The readPump will likely catch the disconnection first, but this is for safety.
 			log.Printf("client: %v has been disconnected", c.UserName)
 			break
 		}
+	}
+}
+
+func (c *Client) readPump(hub *Hub) {
+	defer func() {
+		// This defer block now handles all cleanup.
+		if c.Room != nil {
+			req := OperationsRequest{
+				Username: c.UserName,
+			}
+
+			hub.UnregisterUser(req)
+		}
+
+		c.Conn.Close()
+		log.Printf("client: %v has been disconnected", c.UserName)
+	}()
+
+	for {
+		_, message, err := c.Conn.ReadMessage()
+		if err != nil {
+			log.Printf("error: %s\n", err.Error())
+		}
+		msg := Message{
+			Type:     "message",
+			Username: c.UserName,
+			Content:  string(message),
+		}
+
+		c.Room.Broadcast <- &msg
 	}
 }
