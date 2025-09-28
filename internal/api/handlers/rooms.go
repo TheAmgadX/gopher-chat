@@ -64,6 +64,36 @@ func (h *APIHandlers) LeaveRoomHandler(w http.ResponseWriter, r *http.Request) {
 	claims := r.Context().Value(middleware.UserClaimsKey).(*middleware.Claims)
 
 	username := claims.Username
+
+	if username == "" {
+		utils.WriteJsonErrors(w, "username is required", http.StatusBadRequest)
+		return
+	}
+
+	req := server.OperationsRequest{
+		Username: username,
+	}
+
+	err := h.Hub.LeaveRoom(req)
+
+	if err != nil {
+		utils.WriteJsonErrors(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	err = utils.WriteJson(w, map[string]any{
+		"status": "ok",
+	})
+
+	if err != nil {
+		utils.WriteJsonErrors(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func (h *APIHandlers) CreateRoomHandler(w http.ResponseWriter, r *http.Request) {
+	claims := r.Context().Value(middleware.UserClaimsKey).(*middleware.Claims)
+
+	username := claims.Username
 	room := r.URL.Query().Get("room")
 
 	if username == "" {
@@ -81,7 +111,7 @@ func (h *APIHandlers) LeaveRoomHandler(w http.ResponseWriter, r *http.Request) {
 		RoomName: room,
 	}
 
-	err := h.Hub.LeaveRoom(req)
+	newRoom, err := h.Hub.CreateRoom(req)
 
 	if err != nil {
 		utils.WriteJsonErrors(w, err.Error(), http.StatusBadRequest)
@@ -89,7 +119,9 @@ func (h *APIHandlers) LeaveRoomHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err = utils.WriteJson(w, map[string]any{
-		"status": "ok",
+		"status":   "ok",
+		"username": username,
+		"room":     newRoom.Name,
 	})
 
 	if err != nil {

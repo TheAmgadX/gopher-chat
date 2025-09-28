@@ -81,23 +81,20 @@ func (h *Hub) JoinRoom(request OperationsRequest) error {
 
 func (h *Hub) LeaveRoom(request OperationsRequest) error {
 	h.Mux.RLock()
-
 	// check client and room exist.
 	client, clientOK := h.Clients[request.Username]
-	room, roomOK := h.Rooms[request.RoomName]
 	h.Mux.RUnlock()
 
-	if !roomOK {
-		return fmt.Errorf("error: room not found")
+	if client.Room == nil {
+		return fmt.Errorf("error: client is not in a room")
 	}
 
 	if !clientOK {
 		return fmt.Errorf("error: username not found")
 	}
 
+	client.Room.Unregister <- client
 	client.Room = nil
-
-	room.Unregister <- client
 
 	return nil
 }

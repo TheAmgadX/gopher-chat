@@ -35,6 +35,9 @@ func NewRouter(hub *server.Hub) *mux.Router {
 	// rooms list endpoint.
 	protected.HandleFunc("/rooms", handlers.GetAllRoomsHandler).Methods("GET")
 
+	// create room endpoint.
+	protected.HandleFunc("/create", handlers.CreateRoomHandler).Methods("POST")
+
 	// join room endpoint.
 	protected.HandleFunc("/join", handlers.JoinRoomHandler).Methods("POST")
 
