@@ -12,7 +12,6 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// --- Best Practice: Define constants for magic strings ---
 const (
 	authHeaderKey = "Authorization"
 	authScheme    = "bearer"
